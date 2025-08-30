@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>risk</title>
+<style>
+  :root{
+    --page-bg:#fff;
+    --frame-w:min(92vw, 880px);
+    --frame-h:min(80vh, 640px);
+    --row-gap:6px;   --row-size:20px;
+    --weight:700;    --tracking:0.04em;
+  }
+
+  *{ box-sizing:border-box }
+  html,body{ height:100% }
+  body{
+    margin:0; background:var(--page-bg);
+    display:grid; place-items:center;
+    font-family:"Courier New", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  .stage{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+
+  .frame{
+    width:var(--frame-w); height:var(--frame-h);
+    border:none; border-radius:10px;
+    background:#fff; padding:12px 14px;
+    overflow:hidden; display:grid; place-items:center;
+  }
+
+  .mask-svg{ width:100%; height:100%; display:block }
+
+  .wall{
+    width:100%; height:100%;
+    display:grid; grid-auto-rows:var(--row-size); gap:var(--row-gap);
+    overflow:hidden;
+  }
+  .row{
+    position:relative; overflow:hidden; line-height:1;
+    font-size:16px; font-weight:var(--weight); letter-spacing:var(--tracking);
+    text-transform:uppercase; white-space:nowrap; user-select:none;
+  }
+  .loop{ display:inline-flex; width:max-content; animation:scroll 36s linear infinite; }
+  .row.reverse .loop{ animation-direction:reverse; }
+  .inner{ display:inline-flex; align-items:center; gap:0.8em; padding-right:1em; }
+
+  .row::before,.row::after{
+    content:""; position:absolute; top:0; bottom:0; width:14px; pointer-events:none;
+  }
+  .row::before{ left:-14px;  background:linear-gradient(to right,#fff,transparent) }
+  .row::after { right:-14px; background:linear-gradient(to left,#fff,transparent) }
+
+  .r{ color:#ef4444 }  /* red */
+  .o{ color:#f97316 }  /* orange */
+  .y{ color:#facc15 }  /* yellow */
+
+  @keyframes scroll{ from{transform:translateX(0)} to{transform:translateX(-50%)} }
+
+  .pulsing{ transform-box:fill-box; transform-origin:50% 90%; }
+
+  /* Moving page border (already slow) */
+  .page-border{ position:fixed; inset:0; z-index:5; pointer-events:none; color:#000; font-weight:700; }
+  .strip{ position:absolute; overflow:hidden; }
+  .strip.top, .strip.bottom{ left:0; right:0; height:28px; }
+  .strip.top{ top:0; } .strip.bottom{ bottom:0; }
+  .strip.left, .strip.right{ top:0; bottom:0; width:28px; }
+  .strip.left{ left:0; } .strip.right{ right:0; }
+
+  .move{ display:flex; width:max-content; will-change:transform; animation:ring 220s linear infinite; }
+  .strip.bottom .move{ animation-direction:reverse; }
+  @keyframes ring{ from{transform:translateX(0)} to{transform:translateX(-50%)} }
+  .rot{ position:absolute; left:0; top:0; transform:rotate(90deg); transform-origin:top left; }
+  .line{ white-space:nowrap; padding-right:2rem; }
+
+  .wood-btn{
+    background:#000; color:#fff; border:none; border-radius:10px;
+    padding:10px 14px; font:700 14px "Courier New", ui-monospace;
+    cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,.15);
+  }
+  .wood-btn:active{ transform:translateY(1px); }
+
+  .ember{
+    position:fixed; z-index:20; background:#fff; color:#000;
+    border:2px solid #000; border-radius:10px; padding:8px 12px;
+    font:700 14px "Courier New", ui-monospace; pointer-events:none;
+    opacity:0; transform: translateY(8px) scale(.98);
+    animation: emberPop 2.6s ease-out forwards;
+  }
+  @keyframes emberPop{
+    0%   { opacity:0; transform: translateY(8px) scale(.98); }
+    12%  { opacity:1; transform: translateY(0) scale(1); }
+    100% { opacity:0; transform: translateY(-8px) scale(1.02); }
+  }
+
+  @media (prefers-reduced-motion: reduce){ .loop{ animation:none } .move{ animation:none } }
+</style>
+</head>
+<body>
+  <!-- Moving edge ring -->
+  <div class="page-border" aria-hidden="true">
+    <div class="strip top"><div class="move"><div class="line" id="topA"></div><div class="line" id="topB" aria-hidden="true"></div></div></div>
+    <div class="strip bottom"><div class="move"><div class="line" id="botA"></div><div class="line" id="botB" aria-hidden="true"></div></div></div>
+    <div class="strip left"><div class="rot"><div class="move"><div class="line" id="leftA"></div><div class="line" id="leftB" aria-hidden="true"></div></div></div></div>
+    <div class="strip right"><div class="rot"><div class="move"><div class="line" id="rightA"></div><div class="line" id="rightB" aria-hidden="true"></div></div></div></div>
+  </div>
+
+  <div class="stage">
+    <div class="frame">
+      <svg class="mask-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMax meet">
+        <defs>
+          <path id="flamePathRaw"
+            d="M500.00 653.33 C337.50 653.33 250.00 595.00 250.00 513.33 C250.00 449.17 293.75 408.33 322.50 385.00 C293.75 425.83 315.00 445.67 340.00 445.67 C352.50 403.67 420.00 361.67 420.00 289.33 C420.00 247.33 400.00 207.67 370.00 182.00 C450.00 198.33 490.00 249.67 502.50 294.00 C512.50 266.00 560.00 228.67 585.00 191.33 C585.00 245.00 562.50 284.67 570.00 322.00 C662.50 368.67 750.00 420.00 750.00 501.67 C750.00 595.00 656.25 653.33 500.00 653.33 Z"/>
+          <clipPath id="flameClip" clipPathUnits="userSpaceOnUse">
+            <use href="#flamePathRaw" transform="translate(500 350) scale(1.30) translate(-500 -350)"/>
+          </clipPath>
+        </defs>
+
+        <!-- Group pulses: content + outline -->
+        <g class="pulsing" id="flameGroup">
+          <!-- clipped moving grid -->
+          <foreignObject x="0" y="0" width="1000" height="700" clip-path="url(#flameClip)">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="wall" id="wall"></div>
+          </foreignObject>
+
+          <!-- RED, THINNER OUTLINE that wraps fully (rounded joins/caps) -->
+          <use href="#flamePathRaw"
+               transform="translate(500 350) scale(1.30) translate(-500 -350)"
+               fill="none"
+               stroke="#dc2626" stroke-width="1.25"
+               stroke-linejoin="round" stroke-linecap="round"
+               vector-effect="non-scaling-stroke"
+               style="pointer-events:none"/>
+        </g>
+      </svg>
+    </div>
+
+    <button class="wood-btn" id="addWood">Add wood to the fire</button>
+  </div>
+
+  <script>
+    const wall = document.getElementById('wall');
+
+    function makeRow(reverse=false, speed=36){
+      const row  = document.createElement('div');
+      row.className = 'row' + (reverse ? ' reverse' : '');
+      const loop = document.createElement('div'); loop.className = 'loop';
+      loop.style.animationDuration = speed + 's';
+
+      const inner = document.createElement('div'); inner.className = 'inner';
+      const palette = ['r','o','y'];
+      for(let i=0;i<12;i++){
+        const s = document.createElement('span');
+        s.textContent = 'BLAZERS';
+        s.className = palette[(Math.random()*palette.length)|0];
+        inner.appendChild(s);
+      }
+      const inner2 = inner.cloneNode(true); inner2.setAttribute('aria-hidden','true');
+      loop.append(inner, inner2);
+      row.appendChild(loop);
+      return row;
+    }
+
+    function build(){
+      wall.innerHTML = '';
+      const cs = getComputedStyle(document.documentElement);
+      const rowH = parseFloat(cs.getPropertyValue('--row-size')) || 20;
+      const gap  = parseFloat(cs.getPropertyValue('--row-gap')) || 6;
+      const need = Math.ceil(wall.clientHeight / (rowH + gap)) + 2;
+      const speeds = [32,36,40,44,48,52,60];
+      for(let i=0;i<need;i++) wall.appendChild( makeRow(i%2===1, speeds[i%speeds.length]) );
+    }
+    addEventListener('load', build);
+    addEventListener('resize', () => { clearTimeout(window._r); window._r = setTimeout(build, 120); });
+
+    /* randomized breathing pulse */
+    (function randomPulse(){
+      const grp = document.getElementById('flameGroup');
+      const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const MIN_SCALE = 0.985, MAX_SCALE = 1.030;
+      let drift = 0;
+      function tick(t){
+        if (media.matches) return;
+        const time = t/1000;
+        let s = 1
+          + 0.015*Math.sin(time*1.3)
+          + 0.008*Math.sin(time*2.1 + 0.7)
+          + 0.005*Math.sin(time*3.7 + 1.4)
+          + drift;
+        drift += (Math.random()-0.5)*0.0008; drift *= 0.96;
+        drift = Math.max(-0.01, Math.min(0.01, drift));
+        s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
+        grp.style.transform = `scale(${s})`;
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    })();
+
+    /* fill moving border text */
+    function fillBorder(idA, idB){
+      const text = Array.from({length: 300}).map(()=> 'BLAZERS').join(' ');
+      document.getElementById(idA).textContent = text;
+      document.getElementById(idB).textContent = text;
+    }
+    fillBorder('topA','topB'); fillBorder('botA','botB');
+    fillBorder('leftA','leftB'); fillBorder('rightA','rightB');
+
+    /* ember popups */
+    document.getElementById('addWood').addEventListener('click', () => {
+      const note = document.createElement('div');
+      note.className = 'ember';
+      note.textContent = 'make me a new ember';
+      document.body.appendChild(note);
+
+      const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+      const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+      requestAnimationFrame(() => {
+        const w = note.offsetWidth, h = note.offsetHeight;
+        const x = Math.random() * (vw - w - 20) + 10;
+        const y = Math.random() * (vh - h - 20) + 10;
+        note.style.left = x + 'px';
+        note.style.top  = y + 'px';
+      });
+      setTimeout(() => note.remove(), 2600);
+    });
+  </script>
+</body>
+</html>
